@@ -1,51 +1,38 @@
 // src/components/medical/Prediction/DiseasePrediction.jsx
 import React, { useState, useEffect } from "react";
-import * as tf from "@tensorflow/tfjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Brain } from "lucide-react";
-
-// Create a worker for predictions
-const predictionWorker = new Worker(
-  new URL("./predictionWorker.js", import.meta.url),
-  { type: "module" },
-);
+import { HfInference } from "@huggingface/inference";
 
 export function DiseasePrediction({ patientData }) {
   const [predictions, setPredictions] = useState([]);
-  const [model, setModel] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  useEffect(() => {
-    // Initialize TensorFlow model
-    const loadModel = async () => {
-      try {
-        const loadedModel = await tf.loadLayersModel(
-          "/models/disease_prediction.json",
-        );
-        setModel(loadedModel);
-      } catch (error) {
-        console.error("Error loading model:", error);
-      }
-    };
-
-    loadModel();
-
-    // Set up worker message handler
-    predictionWorker.onmessage = (event) => {
-      setPredictions(event.data.predictions);
-      setIsProcessing(false);
-    };
-
-    return () => {
-      predictionWorker.terminate();
-    };
-  }, []);
-
-  const runPrediction = () => {
+  const runPrediction = async () => {
     setIsProcessing(true);
-    predictionWorker.postMessage({ patientData });
+
+    try {
+      const hf = new HfInference(process.env.NEXT_PUBLIC_HUGGING_FACE_API_KEY);
+
+      // Run prediction using Inference API
+      const result = await hf.textClassification({
+        model: "medicalai/clinical-bert",
+        inputs: patientData.symptoms.join(" "),
+      });
+
+      setPredictions(
+        result.map((pred) => ({
+          condition: pred.label,
+          probability: (pred.score * 100).toFixed(1),
+        })),
+      );
+    } catch (error) {
+      console.error("Prediction error:", error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -64,7 +51,10 @@ export function DiseasePrediction({ patientData }) {
                 <span className="text-[#94A3B8]">{prediction.condition}</span>
                 <span className="text-white">{prediction.probability}%</span>
               </div>
-              <Progress value={prediction.probability} className="h-2" />
+              <Progress
+                value={parseFloat(prediction.probability)}
+                className="h-2"
+              />
             </div>
           ))}
           <Button
@@ -80,9 +70,4 @@ export function DiseasePrediction({ patientData }) {
   );
 }
 
-// Usage:
-// <DiseasePrediction patientData={{
-//   age: 45,
-//   symptoms: ['fever', 'cough'],
-//   vitals: { bloodPressure: '120/80', temperature: 98.6 }
-// }} />
+// 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

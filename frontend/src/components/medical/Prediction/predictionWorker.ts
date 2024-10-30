@@ -1,44 +1,47 @@
 // src/components/medical/Prediction/predictionWorker.js
-import * as tf from "@tensorflow/tfjs";
 import { HfInference } from "@huggingface/inference";
+import { pipeline } from "@xenova/transformers";
 
-const hf = new HfInference(process.env.HUGGING_FACE_API_KEY);
+let classifier = null;
+const hf = new HfInference(process.env.NEXT_PUBLIC_HUGGING_FACE_API_KEY);
 
-// Initialize TensorFlow
-tf.setBackend("webgl");
-
-let model = null;
-
-// Load model
-async function loadModel() {
-  try {
-    model = await tf.loadLayersModel("/models/disease_prediction.json");
-    return true;
-  } catch (error) {
-    console.error("Error loading model:", error);
-    return false;
+async function initializeClassifier() {
+  if (!classifier) {
+    classifier = await pipeline("text-classification", "Xenova/clinical-bert");
   }
+  return classifier;
 }
 
 self.onmessage = async (e) => {
   const { patientData } = e.data;
 
-  if (!model) {
-    await loadModel();
-  }
-
   try {
-    // Process patient data
-    const tensorInput = tf.tensor2d([patientData.symptoms]);
+    // Initialize the classifier if not already done
+    await initializeClassifier();
 
-    // Run prediction
-    const predictions = await model.predict(tensorInput).array();
+    // Convert symptoms to text
+    const symptomText = patientData.symptoms.join(" ");
 
-    // Map predictions to conditions
-    const results = predictions[0].map((prob, index) => ({
-      condition: `Condition ${index + 1}`,
-      probability: (prob * 100).toFixed(1),
-    }));
+    // Local prediction using Transformers.js
+    const localPrediction = await classifier(symptomText);
+
+    // Remote prediction using Inference API
+    const remotePrediction = await hf.textClassification({
+      model: "medicalai/clinical-bert",
+      inputs: symptomText,
+    });
+
+    // Combine predictions
+    const results = {
+      diseases: localPrediction.map((pred) => ({
+        condition: pred.label,
+        probability: (pred.score * 100).toFixed(1),
+      })),
+      risks: remotePrediction.map((pred) => ({
+        factor: pred.label,
+        score: (pred.score * 100).toFixed(1),
+      })),
+    };
 
     self.postMessage({ predictions: results });
   } catch (error) {

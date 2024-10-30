@@ -3,12 +3,12 @@ import { LoginPage } from "./pages/Login";
 import { PrivateRoute } from "./components/auth/PrivateRoute";
 import Layout from "./components/layout/Layout";
 import Dashboard from "./pages/Dashboard";
-
 import { PatientsPage } from "./pages/Patients";
 import AnalysisPage from "./pages/AnalysisPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import Appointments from "./pages/Appointments";
 import { ReportsPage } from "./pages/ReportsPage";
+import MedicalAnalysisPage from "../src/pages/MedicalAnalysisPage"; // New import
 
 export default function App() {
   return (
@@ -29,6 +29,11 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route
+            path="/medical-analysis"
+            element={<MedicalAnalysisPage />}
+          />{" "}
+          {/* New route */}
         </Route>
       </Routes>
     </BrowserRouter>
